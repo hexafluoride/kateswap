@@ -1,0 +1,261 @@
+(env-keys ["ns-admin", "ns-genesis", "ns-operate", "exchangeuser", "tokenissuer", "exchangeop", "user1", "user2", "user3"])
+(env-data {
+  "ns": "swap",
+  "ns-admin-keyset": { "keys": ["ns-admin"], "pred": "keys-all" },
+  "ns-genesis-keyset": { "keys": ["ns-genesis"], "pred": "keys-all" },
+  "ns-operate-keyset": { "keys": ["ns-operate"], "pred": "keys-all" },
+  "swap-ns-admin": { "keys": ["ns-admin"], "pred": "keys-all" },
+  "swap-ns-user": { "keys": ["exchangeuser"], "pred": "keys-all" },
+  "minter-keyset": { "keys": ["tokenissuer"], "pred": "keys-all" },
+  "exchange-operator-keyset": { "keys": ["exchangeop"], "pred": "keys-all" },
+  "exchange-user-keyset": { "keys": ["exchangeuser"], "pred": "keys-all" },
+  "user1-keyset": { "keys": ["user1"], "pred": "keys-all" },
+  "user2-keyset": { "keys": ["user2"], "pred": "keys-all" },
+  "user3-keyset": { "keys": ["user3"], "pred": "keys-all" }  })
+(define-keyset 'minter-keyset)
+(define-keyset 'exchange-operator-keyset)
+(define-keyset 'exchange-user-keyset)
+(define-keyset 'ns-admin-keyset)
+(define-keyset 'ns-genesis-keyset)
+(define-keyset 'ns-operate-keyset)
+(define-keyset 'swap-ns-admin)
+(define-keyset 'swap-ns-user)
+(define-keyset 'user1-keyset)
+(define-keyset 'user2-keyset)
+(define-keyset 'user3-keyset)
+(begin-tx)
+
+(load "root/ns.pact")
+(load "ns.pact")
+(load "root/fungible-v2.pact")
+(load "token-1.pact")
+(load "token-2.pact")
+(load "exchange.pact")
+
+(commit-tx)
+
+(begin-tx)
+(hash swap.mod1)
+(use swap.token1)
+
+(env-keys ["user1"])
+(create-account 'user1 (read-keyset 'user1-keyset))
+(env-keys ["user2"])
+(create-account 'user2 (read-keyset 'user2-keyset))
+(env-keys ["user3"])
+(create-account 'user3 (read-keyset 'user3-keyset))
+
+(env-keys ["tokenissuer"])
+(mint 'user1 100000.0)
+(mint 'user2 10000.0)
+(mint 'user3 1000.0)
+
+(get-balance 'user1)
+(get-balance 'user2)
+(get-balance 'user3)
+
+(commit-tx)
+(begin-tx)
+(hash swap.mod1)
+(use swap.token2)
+
+(print "token2 hash: ")
+(hash swap.token2)
+
+(env-keys ["user1"])
+(create-account 'user1 (read-keyset 'user1-keyset))
+(env-keys ["user2"])
+(create-account 'user2 (read-keyset 'user2-keyset))
+(env-keys ["user3"])
+(create-account 'user3 (read-keyset 'user3-keyset))
+
+(env-keys ["tokenissuer"])
+(mint 'user1 1000.0)
+(mint 'user2 10000.0)
+(mint 'user3 100000.0)
+
+(get-balance 'user1)
+(get-balance 'user2)
+(get-balance 'user3)
+
+(env-keys ["user1"])
+(env-sigs [ { 'key: 'user1, 'caps: [
+  (swap.token2.TRANSFER 'user1 'user2 10.0) ] } ])
+
+(test-capability (swap.token2.TRANSFER 'user1 'user2 10.0))
+(install-capability (swap.token2.TRANSFER 'user1 'user2 10.0))
+(transfer 'user1 'user2 10.0)
+
+(commit-tx)
+
+(begin-tx)
+(env-keys ["exchangeop"])
+
+(use swap.KexRouter2)
+
+(index-token swap.token1 't1-ex)
+(index-token swap.token2 't2-ex)
+
+(env-sigs [ { 'key: 'user1, 'caps: [
+  (swap.token1.TRANSFER
+    ('user1
+    (get-account-for-token swap.token1)
+    100.0)),
+  (swap.token2.TRANSFER
+    ('user1
+    (get-account-for-token swap.token2)
+    100.0)),
+  ]},
+  { 'key: 'user2, 'caps: [
+    (swap.token1.TRANSFER
+      ('user2
+      (get-account-for-token swap.token1)
+      100.0)),
+    (swap.token2.TRANSFER
+      ('user2
+      (get-account-for-token swap.token2)
+      100.0)),
+    ]}
+  ])
+(test-capability (swap.token1.TRANSFER 'user1 (get-account-for-token swap.token1) 100.0))
+(test-capability (swap.token2.TRANSFER 'user1 (get-account-for-token swap.token2) 100.0))
+(test-capability (swap.token1.TRANSFER 'user2 (get-account-for-token swap.token1) 100.0))
+(test-capability (swap.token2.TRANSFER 'user2 (get-account-for-token swap.token2) 100.0))
+;(swap.token1.transfer 'user1 (get-account-for-token swap.token1) 100.0)
+
+(create-pair swap.token1 swap.token2)
+(get-reserves-for-pair swap.token1 swap.token2)
+(add-liquidity swap.token1 swap.token2 10.0 5.0 10.0 5.0 'user1 'user1 'user1 (read-keyset 'user1-keyset))
+(add-liquidity swap.token1 swap.token2 100.0 100.0 5.0 5.0 'user2 'user2 'user2 (read-keyset 'user2-keyset))
+;(map ({ 'key:  'value: read liquidity-pool-token-ledger) (keys liquidity-pool-token-ledger))
+;
+;(map ((list )))
+(select liquidity-pool-token-ledger (constantly true))
+
+(swap.token1.transfer 'user1 (get-account-for-token swap.token1) 10.0)
+(swap.token2.transfer 'user1 (get-account-for-token swap.token2) 5.0)
+
+(print "pre-swap balances:")
+(swap.token1.get-balance 'user1)
+(swap.token2.get-balance 'user1)
+(swap.token1.get-balance (get-account-for-token swap.token1))
+(swap.token2.get-balance (get-account-for-token swap.token2))
+(get-reserves-for-pair swap.token1 swap.token2)
+
+(exchange swap.token2 swap.token1 1.0 'user1 'user1)
+(commit-tx)
+
+(begin-tx)
+
+(use swap.KexRouter2)
+
+(env-sigs [ { 'key: 'user1, 'caps: [
+  (swap.token1.TRANSFER
+    ('user1
+    (get-account-for-token swap.token1)
+    100.0)),
+  (swap.token2.TRANSFER
+    ('user1
+    (get-account-for-token swap.token2)
+    100.0)),
+  ]}])
+
+(test-capability (swap.token1.TRANSFER 'user1 (get-account-for-token swap.token1) 100.0))
+(test-capability (swap.token2.TRANSFER 'user1 (get-account-for-token swap.token2) 100.0))
+
+(print "post-swap balances:")
+(swap.token1.get-balance 'user1)
+(swap.token2.get-balance 'user1)
+(swap.token1.get-balance (get-account-for-token swap.token1))
+(swap.token2.get-balance (get-account-for-token swap.token2))
+(get-reserves-for-pair swap.token1 swap.token2)
+
+(exchange swap.token1 swap.token2 1.66 'user1 'user1)
+
+(print "post-swap balances:")
+(swap.token1.get-balance 'user1)
+(swap.token2.get-balance 'user1)
+(swap.token1.get-balance (get-account-for-token swap.token1))
+(swap.token2.get-balance (get-account-for-token swap.token2))
+(get-reserves-for-pair swap.token1 swap.token2)
+
+(commit-tx)
+
+(begin-tx)
+
+(use swap.KexRouter2)
+(print "pre-burn balances:")
+(swap.token1.get-balance 'user1)
+(swap.token2.get-balance 'user1)
+(swap.token1.get-balance (get-account-for-token swap.token1))
+(swap.token2.get-balance (get-account-for-token swap.token2))
+(get-reserves-for-pair swap.token1 swap.token2)
+
+(burn swap.token2 swap.token1 "user1:swap.token1:swap.token2" 'user1 'user1)
+
+(print "post-burn balances:")
+(swap.token1.get-balance 'user1)
+(swap.token2.get-balance 'user1)
+(swap.token1.get-balance (get-account-for-token swap.token1))
+(swap.token2.get-balance (get-account-for-token swap.token2))
+(get-reserves-for-pair swap.token1 swap.token2)
+
+(commit-tx)
+; (begin-tx)
+;
+; (env-keys ["exchangeop"])
+;
+; (use swap.KexRouter)
+;
+; (print "token2 hash: ")
+; (hash swap.token2)
+;
+; (index-token swap.token1 't1-ex)
+;
+; (env-sigs [ { 'key: 'user1, 'caps: [
+;   (swap.token1.TRANSFER
+;     ('user1
+;     (get-account-for-token swap.token1)
+;     100.0)),
+;   ]}])
+; (test-capability (swap.token1.TRANSFER 'user1 (get-account-for-token swap.token1) 100.0))
+; (swap.token1.transfer 'user1 (get-account-for-token swap.token1) 100.0)
+;
+; (env-keys ["exchangeop"])
+; (index-token swap.token2 't2-ex)
+; (env-sigs [ { 'key: 'user1, 'caps: [
+;   (swap.token2.TRANSFER
+;     ('user1
+;     (get-account-for-token swap.token2)
+;     100.0)),
+;   ]}])
+; (test-capability (swap.token2.TRANSFER 'user1 (get-account-for-token swap.token2) 100.0))
+; (swap.token2.transfer 'user1 (get-account-for-token swap.token2) 100.0)
+;
+; (add-quote swap.token1 swap.token2 5.0)
+; (commit-tx)
+;
+; (begin-tx)
+;
+; (use swap.KexRouter)
+; (env-sigs [ { 'key: 'user1, 'caps: [
+;   (swap.token1.TRANSFER
+;     ('user1
+;     (get-account-for-token swap.token1)
+;     1.0)),
+;   ]}])
+;
+; (env-keys ["exchangeop", "user1", 'user2])
+; ;()
+; (test-capability (swap.token1.TRANSFER 'user1 (get-account-for-token swap.token1) 1.0))
+;
+; (print "pre-swap balances:")
+; (swap.token1.get-balance 'user1)
+; (swap.token2.get-balance 'user1)
+;
+; (exchange swap.token1 swap.token2 1.0 'user1 'user1)
+;
+; (print "post-swap balances:")
+; (swap.token1.get-balance 'user1)
+; (swap.token2.get-balance 'user1)
+; (commit-tx)
